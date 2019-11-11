@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#%# family=manual
+# Script ini harus diletakkan di /usr/share/munin/plugins
+# Lalu buat link di /etc/munin/plugins dengan menambahkan IP address Slave jika server ini Master
+cd /var/lib/pgsql
+
+# Cek apakah server ini slave atau master
+slave=`psql postgres -A -t -c "SELECT pg_is_in_recovery();"`
+master=`psql postgres -A -t -c "SELECT count(client_addr) from pg_stat_replication;"`
+
+# Ambil IP address Slave dari nama link
+dasar='postgres_replication_'
+ip=`basename "$0"|sed "s/$dasar//"`
+id=`echo "$ip"|sed 's/\./_/g'`
+
+case $1 in
+    autoconf)
+        echo yes
+        exit 0
+        ;;
+    config)
+        echo graph_category replication
+        echo graph_title PostgreSQL Streaming Replication to "$ip"
+        if [[ $master -gt 0 ]]; then
+          echo graph_args --logarithmic --units=si
+          #slave_ids=`psql postgres -A -t -c "SELECT replace(host(client_addr),'.','_') FROM pg_stat_replication;"`
+          #for id in $slave_ids
+          #do
+             #ip=`echo "$id"|sed 's/_/./g'`
+             # Cascading Replication
+             if [[ $slave == "t" ]]; then
+                echo "$id"_write.colour COLOUR1
+                echo "$id"_write.draw AREA
+             # Master 
+             else
+                #echo "$id"_pending.warning 30000000
+                #echo "$id"_pending.critical 300000000
+                echo "$id"_pending.label "$ip" Pending Lag \(bytes\)
+                echo "$id"_pending.colour COLOUR0
+                echo "$id"_pending.draw AREA
+                echo "$id"_write.draw STACK
+                #echo "$id"_pending.colour COLOUR0
+             fi
+             #echo "$id_write.warning 30000000" 
+             #echo "$id_write.critical 300000000"
+             #echo "$id_flush.warning 30000000"
+             #echo "$id_flush.critical 300000000"
+             #echo "$id_replay.warning 30000000"
+             #echo "$id_replay.critical 300000000"
+             #echo "$id_total_lag.warning 30000000"
+             echo "$id"_write.label "$ip" Receiving Lag \(bytes\)
+             echo "$id"_flush.label "$ip" Saving Lag \(bytes\)
+             echo "$id"_replay.label "$ip" Replaying Lag \(bytes\)
+             echo "$id"_total_lag.label "$ip" Total Lag \(bytes\)
+             echo "$id"_flush.colour COLOUR7
+             echo "$id"_replay.colour COLOUR3
+             echo "$id"_total_lag.colour COLOUR4
+             echo "$id"_flush.draw STACK
+             echo "$id"_replay.draw STACK
+          #done
+        fi
+#        if [[ $slave == "t" ]]; then
+#            echo delay_s.label Replication Delay \(seconds\)
+#            echo delay_s.colour COLOUR5
+#            echo delay_s.warning  300
+#            echo delay_s.critical 600
+#        fi
+        exit 0
+        ;;
+esac
+
+if [[ $master -gt 0 ]]; then
+  if [[ $slave == "t" ]]; then  
+    # Cascading Replication
+    psql postgres -A -t -c "SELECT '$id' || '_write.value ' || (pg_xlog_location_diff(sent_location,write_location))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_xlog_location_diff(write_location,flush_location))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_xlog_location_diff(flush_location,replay_location))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (pg_xlog_location_diff(sent_location,replay_location))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
+  else
+    # Master
+    psql postgres -A -t -c "SELECT '$id' || '_pending.value ' || (pg_xlog_location_diff(pg_current_xlog_location(),sent_location))::varchar || chr(10) || '$id' || '_write.value ' || (pg_xlog_location_diff(sent_location,write_location))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_xlog_location_diff(write_location,flush_location))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_xlog_location_diff(flush_location,replay_location))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (coalesce(pg_xlog_location_diff(pg_current_xlog_location(),replay_location), pg_xlog_location_diff(pg_current_xlog_location(),flush_location)))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
+  fi
+fi
+
+#if [[ $slave == "t" ]]; then
+#    # Slave
+#    echo -n "delay_s.value "
+#    psql postgres -A -t -c "SELECT CASE WHEN pg_last_xlog_receive_location() = pg_last_xlog_replay_location() THEN 0 ELSE EXTRACT (EPOCH FROM now() - pg_last_xact_replay_timestamp()) END;" | tr -d "\n"
+#fi
+
+exit 0
