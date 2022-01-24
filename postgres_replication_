@@ -2,7 +2,7 @@
 #%# family=manual
 # Script ini harus diletakkan di /usr/share/munin/plugins
 # Lalu buat link di /etc/munin/plugins dengan menambahkan IP address Slave jika server ini Master
-cd /var/lib/pgsql
+# Hanya untuk PostgreSQL versi 9.6 dan sebelumnya
 
 # Cek apakah server ini slave atau master
 slave=`psql postgres -A -t -c "SELECT pg_is_in_recovery();"`
