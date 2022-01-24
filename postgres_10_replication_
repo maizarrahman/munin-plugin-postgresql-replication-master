@@ -1,0 +1,61 @@
+#!/bin/bash
+#%# family=manual
+# Script ini harus diletakkan di /usr/share/munin/plugins
+# Lalu buat link di /etc/munin/plugins dengan menambahkan IP address Slave jika server ini Master
+# Hanya untuk PostgreSQL versi 10 dan setelahnya
+
+# Cek apakah server ini slave atau master
+slave=`psql postgres -A -t -c "SELECT pg_is_in_recovery();"`
+master=`psql postgres -A -t -c "SELECT count(client_addr) from pg_stat_replication;"`
+
+# Ambil IP address Slave dari nama link
+dasar='postgres_10_replication_'
+ip=`basename "$0"|sed "s/$dasar//"`
+id=`echo "$ip"|sed 's/\./_/g'`
+
+case $1 in
+    autoconf)
+        echo yes
+        exit 0
+        ;;
+    config)
+        echo graph_category PostgreSQL
+        echo graph_title PostgreSQL Streaming Replication to "$ip"
+        if [[ $master -gt 0 ]]; then
+          echo graph_args --logarithmic --units=si
+             # Cascading Replication
+             if [[ $slave == "t" ]]; then
+                echo "$id"_write.colour COLOUR1
+                echo "$id"_write.draw AREA
+             # Master 
+             else
+                echo "$id"_pending.label "$ip" Pending Lag \(bytes\)
+                echo "$id"_pending.colour COLOUR0
+                echo "$id"_pending.draw AREA
+                echo "$id"_write.draw STACK
+             fi
+             echo "$id"_write.label "$ip" Receiving Lag \(bytes\)
+             echo "$id"_flush.label "$ip" Saving Lag \(bytes\)
+             echo "$id"_replay.label "$ip" Replaying Lag \(bytes\)
+             echo "$id"_total_lag.label "$ip" Total Lag \(bytes\)
+             echo "$id"_flush.colour COLOUR7
+             echo "$id"_replay.colour COLOUR3
+             echo "$id"_total_lag.colour COLOUR4
+             echo "$id"_flush.draw STACK
+             echo "$id"_replay.draw STACK
+        fi
+        exit 0
+        ;;
+esac
+
+if [[ $master -gt 0 ]]; then
+  if [[ $slave == "t" ]]; then  
+    # Cascading Replication
+    psql postgres -A -t -c "SELECT '$id' || '_write.value ' || (pg_wal_lsn_diff(sent_location,write_location))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_wal_lsn_diff(write_location,flush_location))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_wal_lsn_diff(flush_location,replay_location))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (pg_wal_lsn_diff(sent_location,replay_location))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
+  else
+    # Master
+    psql postgres -A -t -c "SELECT '$id' || '_pending.value ' || (pg_wal_lsn_diff(pg_current_wal_lsn(),sent_location))::varchar || chr(10) || '$id' || '_write.value ' || (pg_wal_lsn_diff(sent_location,write_location))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_wal_lsn_diff(write_location,flush_location))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_wal_lsn_diff(flush_location,replay_location))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (coalesce(pg_wal_lsn_diff(pg_current_wal_lsn(),replay_location), pg_wal_lsn_diff(pg_current_wal_lsn(),flush_location)))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
+  fi
+fi
+
+exit 0
