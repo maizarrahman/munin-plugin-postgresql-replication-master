@@ -21,7 +21,7 @@ case $1 in
     config)
         echo graph_category PostgreSQL
         echo graph_title PostgreSQL Streaming Replication to "$ip"
-        echo graph_info This graph shows how much replication lag measured by WAL (write ahead log) size
+        echo 'graph_info This graph shows how much replication lag measured by WAL (write ahead log) size'
         if [[ $master -gt 0 ]]; then
           echo graph_args --logarithmic --units=si
              # Cascading Replication
