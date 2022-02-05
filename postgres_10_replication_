@@ -21,18 +21,21 @@ case $1 in
     config)
         echo graph_category PostgreSQL
         echo graph_title PostgreSQL Streaming Replication to "$ip"
+        echo graph_info This graph shows how much replication lag measured by WAL (write ahead log) size
         if [[ $master -gt 0 ]]; then
           echo graph_args --logarithmic --units=si
              # Cascading Replication
              if [[ $slave == "t" ]]; then
                 echo "$id"_write.colour COLOUR1
                 echo "$id"_write.draw AREA
+                echo "$id"_write.info "Sent WAL that's not yet received in $ip"
              # Master 
              else
                 echo "$id"_pending.label "$ip" Pending Lag \(bytes\)
                 echo "$id"_pending.colour COLOUR0
                 echo "$id"_pending.draw AREA
                 echo "$id"_write.draw STACK
+                echo "$id"_pending.info "WAL that's not yet sent to $ip"
              fi
              echo "$id"_write.label "$ip" Receiving Lag \(bytes\)
              echo "$id"_flush.label "$ip" Saving Lag \(bytes\)
@@ -43,6 +46,8 @@ case $1 in
              echo "$id"_total_lag.colour COLOUR4
              echo "$id"_flush.draw STACK
              echo "$id"_replay.draw STACK
+             echo "$id"_flush.info "Received WAL that's not yet completely written to disk in $ip"
+             echo "$id"_replay.info "Written WAL that's not yet replayed in $ip's database"
         fi
         exit 0
         ;;
