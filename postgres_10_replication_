@@ -56,10 +56,10 @@ esac
 if [[ $master -gt 0 ]]; then
   if [[ $slave == "t" ]]; then  
     # Cascading Replication
-    psql postgres -A -t -c "SELECT '$id' || '_write.value ' || (pg_wal_lsn_diff(sent_location,write_location))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_wal_lsn_diff(write_location,flush_location))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_wal_lsn_diff(flush_location,replay_location))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (pg_wal_lsn_diff(sent_location,replay_location))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
+    psql postgres -p 5432 -A -t -c "SELECT '$id' || '_write.value ' || (pg_wal_lsn_diff(sent_lsn,write_lsn))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_wal_lsn_diff(write_lsn,flush_lsn))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_wal_lsn_diff(flush_lsn,replay_lsn))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (pg_wal_lsn_diff(sent_lsn,replay_lsn))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
   else
     # Master
-    psql postgres -A -t -c "SELECT '$id' || '_pending.value ' || (pg_wal_lsn_diff(pg_current_wal_lsn(),sent_location))::varchar || chr(10) || '$id' || '_write.value ' || (pg_wal_lsn_diff(sent_location,write_location))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_wal_lsn_diff(write_location,flush_location))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_wal_lsn_diff(flush_location,replay_location))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (coalesce(pg_wal_lsn_diff(pg_current_wal_lsn(),replay_location), pg_wal_lsn_diff(pg_current_wal_lsn(),flush_location)))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
+    psql postgres -p 5432 -A -t -c "SELECT '$id' || '_pending.value ' || (pg_wal_lsn_diff(pg_current_wal_lsn(),sent_lsn))::varchar || chr(10) || '$id' || '_write.value ' || (pg_wal_lsn_diff(sent_lsn,write_lsn))::varchar || chr(10) || '$id' || '_flush.value ' || (pg_wal_lsn_diff(write_lsn,flush_lsn))::varchar || chr(10) || coalesce('$id' || '_replay.value ' || (pg_wal_lsn_diff(flush_lsn,replay_lsn))::varchar || chr(10),'') || '$id' || '_total_lag.value ' || (coalesce(pg_wal_lsn_diff(pg_current_wal_lsn(),replay_lsn), pg_wal_lsn_diff(pg_current_wal_lsn(),flush_lsn)))::varchar as replication_lag FROM pg_stat_replication where client_addr = '$ip';"
   fi
 fi
 
